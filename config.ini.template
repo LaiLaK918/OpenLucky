@@ -1,0 +1,16 @@
+[OKX]
+# OKX API 配置 - 从 https://www.okx.com/account/my-api 获取
+# OKX API Configuration - Get from https://www.okx.com/account/my-api
+api_key = your_okx_api_key_here
+api_secret = your_okx_api_secret_here
+api_passphrase = your_okx_passphrase_here
+
+[XAI]
+# xAI API 配置 - 从 https://console.x.ai/ 获取
+# xAI API Configuration - Get from https://console.x.ai/
+api_key = your_xai_api_key_here
+
+[EXECUTION]
+# 交易执行间隔（分钟）
+# Trading execution interval (minutes)
+interval_minutes = 30

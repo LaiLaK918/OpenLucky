@@ -1,0 +1,33 @@
+# 🍀 OpenLucky v1.0 - Dependencies
+# Python 3.8+ required
+
+# === Core Trading APIs ===
+python-okx==0.2.8          # OKX Exchange API client
+xai-sdk>=0.0.1             # xAI Grok-4 model access
+
+# === Data Processing ===
+numpy>=1.21.0              # Numerical computing
+pandas>=1.3.0              # Data manipulation and analysis
+scipy>=1.7.0               # Scientific computing and statistics
+
+# === Data Validation ===
+pydantic>=2.0.0            # Data validation and structured outputs
+
+# === HTTP & WebSocket ===
+requests>=2.25.0           # HTTP client for REST APIs
+aiohttp>=3.8.0             # Async HTTP client
+websockets>=10.0           # WebSocket client for real-time data
+
+# === Standard Library (Python 3.8+ built-in) ===
+# configparser - Configuration file parsing (built-in)
+# logging - Logging system (built-in)
+# asyncio - Asynchronous programming (built-in)
+# json - JSON processing (built-in)
+# datetime - Date and time handling (built-in)
+# threading - Thread management (built-in)
+# subprocess - Process management (built-in)
+
+# === Optional Development Tools ===
+# pytest>=6.0.0           # Testing framework (uncomment if needed)
+# black>=22.0.0            # Code formatter (uncomment if needed)
+# flake8>=4.0.0            # Code linter (uncomment if needed)

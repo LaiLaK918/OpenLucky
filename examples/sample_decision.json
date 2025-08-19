@@ -1,0 +1,32 @@
+{
+  "trades": [
+    {
+      "instId": "BTC-USDT-SWAP",
+      "tdMode": "cross",
+      "side": "buy",
+      "ordType": "market",
+      "sz": "1",
+      "lever": "10",
+      "attachAlgoOrds": {
+        "tpTriggerPx": "45000.0",
+        "tpOrdPx": "-1",
+        "slTriggerPx": "39000.0",
+        "slOrdPx": "-1",
+        "tpTriggerPxType": "mark",
+        "slTriggerPxType": "mark"
+      }
+    }
+  ],
+  "closures": [
+    {
+      "instId": "ETH-USDT-SWAP",
+      "posSide": "net"
+    }
+  ],
+  "reason": "市场分析显示BTC在42000附近形成强支撑，RSI(58.3)处于中性偏多区域，MACD柱状图转正显示动能增强。同时ETH相对表现较弱，建议平仓止盈。基于当前账户余额1250 USDT，建议使用10倍杠杆开仓1个BTC合约，设置止盈45000、止损39000，风险回报比约1.5:1。/ Market analysis shows BTC forming strong support around 42000, RSI(58.3) in neutral-bullish zone, MACD histogram turning positive indicating strengthening momentum. ETH shows relative weakness, recommend closing for profit taking. Based on current account balance of 1250 USDT, suggest opening 1 BTC contract with 10x leverage, TP at 45000, SL at 39000, risk-reward ratio approximately 1.5:1.",
+  "_metadata": {
+    "timestamp": "2025-08-19T10:30:45.123456",
+    "model": "grok-4-0709",
+    "analysis_type": "ai_structured_output"
+  }
+}
