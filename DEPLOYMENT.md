@@ -1,6 +1,6 @@
 # 🚀 部署指南 / Deployment Guide
 
-本文档提供 OpenLucky 在不同环境下的详细部署说明。
+本文档提供了 OpenLucky 在不同环境下的详细部署说明。
 
 This document provides detailed deployment instructions for OpenLucky in different environments.
 
