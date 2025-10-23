@@ -273,7 +273,7 @@ class OKXReporter:
                         # Convert to website format
                         processed_pos = {
                             'instId': pos.get('instId', ''),
-                            'posStatus': 'Fully Closed (全部平仓)',
+                            'posStatus': 'Fully Closed',
                             'openAvgPx': pos.get('openAvgPx', ''),
                             'closeAvgPx': pos.get('closeAvgPx', ''),
                             'realizedPnl': pos.get('pnl', ''),

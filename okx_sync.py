@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-OKX 市场数据同步脚本
-功能：获取历史数据 + WebSocket 实时更新 = 始终保持最新的本地数据
-数据结构：按时间框架保存不同数量的K线数据
+OKX Market Data Synchronization Script
+Functionality: Fetch historical data + WebSocket real-time updates = Always keep local data up-to-date
+Data Structure: Save different amounts of candlestick data based on timeframes
 """
 
 import asyncio
@@ -16,7 +16,7 @@ import logging
 import random
 import collections
 
-# 配置日志
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] %(levelname)s: %(message)s',
@@ -25,7 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class AsyncRateLimiter:
-    """轻量级令牌桶速率限制器（协程安全）"""
+    """Lightweight token bucket rate limiter (coroutine-safe)"""
     def __init__(self, max_requests: int, period_seconds: float):
         self.max_requests = max_requests
         self.period = period_seconds
@@ -35,13 +35,13 @@ class AsyncRateLimiter:
     async def acquire(self):
         async with self._lock:
             now = time.monotonic()
-            # 清理过期时间戳
+            # Clean up expired timestamps
             while self.timestamps and now - self.timestamps[0] > self.period:
                 self.timestamps.popleft()
             if len(self.timestamps) >= self.max_requests:
                 sleep_time = self.period - (now - self.timestamps[0]) + 0.01
                 await asyncio.sleep(max(0.0, sleep_time))
-            # 记录当前请求
+            # Record current request
             self.timestamps.append(time.monotonic())
 
 class OKXMarketSync:
@@ -49,33 +49,33 @@ class OKXMarketSync:
         self.rest_url = "https://www.okx.com"
         self.ws_url = "wss://ws.okx.com:8443/ws/v5/business"
         self.market_data = {}
-        self.save_interval = 60  # 1分钟保存一次
-        self.data_dir = "data"  # 数据目录
-        self.summary_file = "data/summary.json"  # 概要文件
-        self.instruments_file = "instruments.json"  # 产品基础信息文件
-        self.instruments_cache_hours = 24  # 产品信息缓存24小时
-        # REST并发与速率限制（OKX 文档：约40请求/2秒）
+        self.save_interval = 60  # Save every 1 minute
+        self.data_dir = "data"  # Data directory
+        self.summary_file = "data/summary.json"  # Summary file
+        self.instruments_file = "instruments.json"  # Product basic info file
+        self.instruments_cache_hours = 24  # Cache product info for 24 hours
+        # REST concurrency and rate limiting (OKX docs: about 40 requests/2 seconds)
         self.rest_concurrency = 8
-        self._rest_sem = None  # 将在事件循环中初始化
-        # 一致性刷新节流
+        self._rest_sem = None  # Will be initialized in event loop
+        # Consistency refresh throttling
         self.last_refresh = {}
-        # 允许在一致性巡检中自动回补的周期（避免1W/1M频繁刷）
+        # Allowed periods for auto-backfill in consistency check (avoid frequent refresh of 1W/1M)
         self.consistency_allowed_bars = {"5m", "15m", "1H", "4H", "1D"}
-        # 全局速率限制器：每秒最多18次
+        # Global rate limiter: max 18 per second
         self.rate_limiter = AsyncRateLimiter(max_requests=18, period_seconds=1.0)
         
-        # K线保留数量配置
+        # Candlestick retention quantity configuration
         self.candle_limits = {
-            "5m": 288,   # 24小时
-            "15m": 192,  # 48小时
-            "1H": 168,   # 7天
-            "4H": 180,   # 30天
-            "1D": 90,    # 3个月
-            "1W": 52,    # 1年
-            "1M": 12     # 1年
+            "5m": 288,   # 24 hours
+            "15m": 192,  # 48 hours
+            "1H": 168,   # 7 days
+            "4H": 180,   # 30 days
+            "1D": 90,    # 3 months
+            "1W": 52,    # 1 year
+            "1M": 12     # 1 year
         }
         
-        # 时间框架映射（WebSocket用小写，REST API用大写）
+        # Timeframe mapping (WebSocket uses lowercase, REST API uses uppercase)
         self.timeframe_map = {
             "5m": "5m",
             "15m": "15m",
@@ -86,7 +86,7 @@ class OKXMarketSync:
             "1M": "1M"
         }
 
-        # 各时间框架对应毫秒数（用于数据新鲜度判断）
+        # Milliseconds corresponding to each timeframe (for data freshness judgment)
         self.timeframe_ms = {
             "5m": 5 * 60 * 1000,
             "15m": 15 * 60 * 1000,
@@ -94,37 +94,37 @@ class OKXMarketSync:
             "4H": 4 * 60 * 60 * 1000,
             "1D": 24 * 60 * 60 * 1000,
             "1W": 7 * 24 * 60 * 60 * 1000,
-            "1M": 30 * 24 * 60 * 60 * 1000  # 近似值
+            "1M": 30 * 24 * 60 * 60 * 1000  # Approximate value
         }
         
     async def start(self):
-        """主启动函数"""
+        """Main startup function"""
         logger.info("Starting OKX Market Sync...")
         
         try:
-            # 初始化并发信号量
+            # Initialize concurrency semaphore
             self._rest_sem = asyncio.Semaphore(self.rest_concurrency)
-            # 0. 创建数据目录
+            # 0. Create data directory
             os.makedirs(self.data_dir, exist_ok=True)
             
-            # 1. 更新产品基础信息（如果需要）
+            # 1. Update product basic info (if needed)
             await self.update_instruments_info()
             
-            # 2. 获取要同步的产品列表
+            # 2. Get list of products to synchronize
             instruments = await self.get_instruments()
             logger.info(f"Found {len(instruments)} USDT-SWAP instruments")
             
-            # 3. 加载已有数据（如果存在）
+            # 3. Load existing data (if exists)
             self.load_existing_data()
             
-            # 4. 获取历史K线数据
+            # 4. Get historical candlestick data
             await self.fetch_all_history(instruments)
             logger.info("Historical data loaded")
             
-            # 5. 保存初始数据
+            # 5. Save initial data
             self.save_all_data()
             
-            # 6. 启动WebSocket、数据一致性巡检与定期保存
+            # 6. Start WebSocket, data consistency patrol and periodic saving
             await asyncio.gather(
                 self.websocket_loop(instruments),
                 self.consistency_loop(instruments),
@@ -136,18 +136,18 @@ class OKXMarketSync:
             logger.error(f"Unexpected error: {e}")
     
     def load_existing_data(self):
-        """加载已存在的数据文件"""
+        """Load existing data files"""
         if not os.path.exists(self.data_dir):
             return
         
-        # 读取概要文件获取产品列表
+        # Read summary file to get product list
         if os.path.exists(self.summary_file):
             try:
                 with open(self.summary_file, 'r') as f:
                     summary = json.load(f)
                     instruments = summary.get('instruments', [])
                     
-                    # 加载每个产品的数据文件
+                    # Load data file for each product
                     for inst_id in instruments:
                         data_file = f"{self.data_dir}/{inst_id}.json"
                         if os.path.exists(data_file):
@@ -163,8 +163,8 @@ class OKXMarketSync:
                 logger.warning(f"Failed to load summary file: {e}")
     
     async def update_instruments_info(self):
-        """更新产品基础信息（24小时缓存）"""
-        # 检查是否需要更新
+        """Update product basic info (24-hour cache)"""
+        # Check if update is needed
         if os.path.exists(self.instruments_file):
             file_time = os.path.getmtime(self.instruments_file)
             current_time = time.time()
@@ -176,7 +176,7 @@ class OKXMarketSync:
         
         logger.info("Updating instruments info...")
         
-        # 从API获取所有SWAP产品的基础信息
+        # Get basic info for all SWAP products from API
         async with aiohttp.ClientSession() as session:
             url = f"{self.rest_url}/api/v5/public/instruments?instType=SWAP"
             async with session.get(url) as resp:
@@ -187,7 +187,7 @@ class OKXMarketSync:
                 
                 all_instruments = data['data']
         
-        # 筛选USDT合约的基础信息
+        # Filter basic info for USDT contracts
         usdt_instruments = {}
         for inst in all_instruments:
             if (inst.get('instType') == 'SWAP' and 
@@ -195,8 +195,8 @@ class OKXMarketSync:
                 inst.get('state') == 'live'):
                 usdt_instruments[inst['instId']] = inst
         
-        # 保存到文件 - 使用标准JSON格式，每个instrument ID作为顶级key
-        # 原子写入
+        # Save to file - use standard JSON format, each instrument ID as top-level key
+        # Atomic write
         temp_file = f"{self.instruments_file}.tmp"
         with open(temp_file, 'w') as f:
             json.dump(usdt_instruments, f, indent=2, ensure_ascii=False)
@@ -206,8 +206,8 @@ class OKXMarketSync:
         logger.info(f"Updated instruments info: {len(usdt_instruments)} USDT-SWAP instruments")
     
     async def get_instruments(self):
-        """获取所有USDT永续合约ID列表"""
-        # 从本地instruments.json文件读取
+        """Get list of all USDT perpetual contract IDs"""
+        # Read from local instruments.json file
         if not os.path.exists(self.instruments_file):
             logger.error(f"Instruments file {self.instruments_file} not found")
             return []
@@ -216,10 +216,10 @@ class OKXMarketSync:
             with open(self.instruments_file, 'r') as f:
                 instruments = json.load(f)
             
-            # 直接获取所有instrument ID（现在是顶级key）
+            # Get all instrument IDs directly (now top-level keys)
             usdt_swaps = list(instruments.keys())
             
-            # 返回所有 USDT-SWAP 产品ID
+            # Return all USDT-SWAP product IDs
             logger.info(f"Total USDT-SWAP instruments found: {len(usdt_swaps)}")
             return usdt_swaps
             
@@ -228,7 +228,7 @@ class OKXMarketSync:
             return []
     
     async def fetch_all_history(self, instruments):
-        """获取所有产品的历史K线（并发+限速）"""
+        """Get historical candlesticks for all products (concurrent + rate limited)"""
         async with aiohttp.ClientSession() as session:
             tasks = []
             now_ms = int(time.time() * 1000)
@@ -271,20 +271,20 @@ class OKXMarketSync:
             logger.error(f"Error fetching {inst_id} {bar}: {e}")
     
     async def websocket_loop(self, instruments):
-        """WebSocket循环"""
+        """WebSocket loop"""
         reconnect_delay = 1
         
         while True:
             try:
                 async with websockets.connect(self.ws_url) as ws:
                     logger.info("WebSocket connected")
-                    reconnect_delay = 1  # 重置延迟
+                    reconnect_delay = 1  # Reset delay
                     
-                    # 分批订阅K线数据（避免超过64KB限制）
-                    # 每个订阅约50字节，64KB ≈ 1300个订阅
-                    # 7个时间框架，所以每批最多 1300/7 ≈ 185 个产品
-                    # 为安全起见，使用更小的批次
-                    batch_size = 15  # 每批15个产品 = 105个订阅
+                    # Subscribe to candlestick data in batches (avoid exceeding 64KB limit)
+                    # Each subscription is about 50 bytes, 64KB ≈ 1300 subscriptions
+                    # 7 timeframes, so max 1300/7 ≈ 185 products per batch
+                    # Use smaller batches for safety
+                    batch_size = 15  # 15 products per batch = 105 subscriptions
                     timeframes = list(self.timeframe_map.items())
                     
                     for i in range(0, len(instruments), batch_size):
@@ -295,7 +295,7 @@ class OKXMarketSync:
                             "args": []
                         }
                         
-                        # 为当前批次的产品添加所有时间框架订阅
+                        # Add all timeframe subscriptions for current batch of products
                         for inst_id in batch_instruments:
                             for tf, ws_tf in timeframes:
                                 sub_msg["args"].append({
@@ -305,18 +305,18 @@ class OKXMarketSync:
                         
                         logger.info(f"Subscribing batch {i//batch_size + 1}: {len(batch_instruments)} instruments, {len(sub_msg['args'])} subscriptions")
                         await ws.send(json.dumps(sub_msg))
-                        await asyncio.sleep(1)  # 给服务器更多时间处理
+                        await asyncio.sleep(1)  # Give server more time to process
                     
                     logger.info(f"Subscribed to {len(instruments)} instruments")
                     
-                    # 启动心跳任务
+                    # Start heartbeat task
                     heartbeat_task = asyncio.create_task(self.heartbeat_loop(ws))
                     
                     try:
-                        # 接收数据
+                        # Receive data
                         async for message in ws:
                             try:
-                                # 处理 pong 响应
+                                # Handle pong response
                                 if message == 'pong':
                                     continue
                                 
@@ -328,7 +328,7 @@ class OKXMarketSync:
                             except Exception as e:
                                 logger.error(f"Error processing message: {e}")
                     finally:
-                        # 取消心跳任务
+                        # Cancel heartbeat task
                         heartbeat_task.cancel()
                         try:
                             await heartbeat_task
@@ -338,13 +338,13 @@ class OKXMarketSync:
             except Exception as e:
                 logger.error(f"WebSocket error: {e}")
                 await asyncio.sleep(reconnect_delay)
-                reconnect_delay = min(reconnect_delay * 2, 60)  # 指数退避，最多60秒
+                reconnect_delay = min(reconnect_delay * 2, 60)  # Exponential backoff, max 60 seconds
     
     async def heartbeat_loop(self, ws):
-        """心跳循环 - 每25秒发送一次ping"""
+        """Heartbeat loop - send ping every 25 seconds"""
         try:
             while True:
-                await asyncio.sleep(25)  # 每25秒发送一次（小于30秒的安全值）
+                await asyncio.sleep(25)  # Send every 25 seconds (safe value under 30 seconds)
                 await ws.send('ping')
                 logger.debug("Sent ping")
         except asyncio.CancelledError:
@@ -355,7 +355,7 @@ class OKXMarketSync:
             raise
     
     def update_candle(self, msg):
-        """更新K线数据"""
+        """Update candlestick data"""
         arg = msg['arg']
         channel = arg.get('channel', '')
         inst_id = arg.get('instId', '')
@@ -363,10 +363,10 @@ class OKXMarketSync:
         if not inst_id or 'candle' not in channel:
             return
         
-        # 提取时间周期
+        # Extract time period
         ws_bar = channel.replace('candle', '')
         
-        # 找到对应的标准时间框架
+        # Find corresponding standard timeframe
         bar = None
         for tf, ws_tf in self.timeframe_map.items():
             if ws_tf == ws_bar:
@@ -376,7 +376,7 @@ class OKXMarketSync:
         if not bar or bar not in self.candle_limits:
             return
         
-        # 确保数据结构存在
+        # Ensure data structure exists
         if inst_id not in self.market_data:
             self.market_data[inst_id] = {}
         if bar not in self.market_data[inst_id]:
@@ -385,18 +385,18 @@ class OKXMarketSync:
                 "candles": []
             }
         
-        # 更新数据
+        # Update data
         new_candles = msg['data']
         bar_data = self.market_data[inst_id][bar]
         
         for new_candle in new_candles:
             ts = int(new_candle[0])
             
-            # 更新最新时间戳
+            # Update latest timestamp
             if ts > bar_data["latest_ts"]:
                 bar_data["latest_ts"] = ts
             
-            # 查找是否需要更新
+            # Check if update is needed
             updated = False
             for i, candle in enumerate(bar_data["candles"]):
                 if int(candle[0]) == ts:
@@ -404,16 +404,16 @@ class OKXMarketSync:
                     updated = True
                     break
             
-            # 如果是新K线，添加到开头
+            # If it's a new candlestick, add to the beginning
             if not updated:
                 bar_data["candles"].insert(0, new_candle)
-                # 保持限定数量
+                # Maintain limited quantity
                 limit = self.candle_limits[bar]
                 bar_data["candles"] = bar_data["candles"][:limit]
 
     async def consistency_loop(self, instruments):
-        """数据一致性巡检与自动回补：确保各时间框架无断层、最新且长度达标"""
-        # 巡检周期（秒）
+        """Data consistency patrol and auto-backfill: ensure all timeframes are gap-free, up-to-date and meet length standards"""
+        # Patrol interval (seconds)
         interval_seconds = 180
         while True:
             try:
@@ -425,7 +425,7 @@ class OKXMarketSync:
                         for bar, limit in self.candle_limits.items():
                             if bar not in self.market_data[inst_id]:
                                 continue
-                            # 只对允许的周期执行自动回补
+                            # Only perform auto-backfill for allowed periods
                             if bar not in self.consistency_allowed_bars:
                                 continue
                             if self._need_refresh_or_backfill(inst_id, bar):
@@ -434,11 +434,11 @@ class OKXMarketSync:
                         await asyncio.gather(*refresh_tasks)
             except Exception as e:
                 logger.warning(f"Consistency loop warning: {e}")
-            # 等待下轮
+            # Wait for next round
             await asyncio.sleep(interval_seconds)
 
     def _need_refresh_or_backfill(self, inst_id: str, bar: str) -> bool:
-        """判断该产品该周期是否需要刷新（长度不足/过旧/存在断层）"""
+        """Determine if this product/period needs refresh (insufficient length/too old/gaps exist)"""
         try:
             bar_ms = self.timeframe_ms.get(bar, 0)
             if bar_ms <= 0:
@@ -449,11 +449,11 @@ class OKXMarketSync:
             limit = self.candle_limits.get(bar, 0)
             if not candles or len(candles) < max(10, limit // 3):
                 return True
-            # 过旧
+            # Too old
             now_ms = int(time.time() * 1000)
             if latest_ts == 0 or (now_ms - latest_ts) > bar_ms * 3:
                 return True
-            # 断层：检查最近若干根时间间隔
+            # Gaps: check time intervals of recent candlesticks
             check_n = min(50, len(candles) - 1)
             for i in range(check_n):
                 try:
@@ -462,7 +462,7 @@ class OKXMarketSync:
                 except Exception:
                     return True
                 gap = ts_curr - ts_next
-                # 允许因撮合延迟产生的小抖动，阈值1.5个bar
+                # Allow small jitter due to matching delays, threshold 1.5 bars
                 if gap > int(bar_ms * 1.5):
                     return True
             return False
@@ -470,7 +470,7 @@ class OKXMarketSync:
             return True
 
     async def _refresh_recent_candles(self, session: aiohttp.ClientSession, inst_id: str, bar: str, limit: int):
-        """用REST刷新该产品该周期的最近K线，修复断层与过旧问题"""
+        """Use REST to refresh recent candlesticks for this product/period, fix gaps and staleness"""
         url = f"{self.rest_url}/api/v5/market/candles"
         params = {'instId': inst_id, 'bar': bar, 'limit': str(min(limit, 300))}
         try:
@@ -480,7 +480,7 @@ class OKXMarketSync:
                     data = await resp.json()
             if data.get('code') == '0' and data.get('data'):
                 candles = data['data']
-                # 覆盖写入
+                # Overwrite
                 if inst_id not in self.market_data:
                     self.market_data[inst_id] = {}
                 if bar not in self.market_data[inst_id]:
@@ -488,7 +488,7 @@ class OKXMarketSync:
                 self.market_data[inst_id][bar]["candles"] = candles
                 self.market_data[inst_id][bar]["latest_ts"] = int(candles[0][0]) if candles else 0
                 logger.info(f"Refreshed {bar} candles for {inst_id} (consistency)")
-                # 标记节流时间
+                # Mark throttle time
                 self.last_refresh.setdefault(inst_id, {})[bar] = int(time.time() * 1000)
             else:
                 logger.warning(f"Failed to refresh {inst_id} {bar}: {data}")
@@ -496,42 +496,42 @@ class OKXMarketSync:
             logger.warning(f"Refresh error for {inst_id} {bar}: {e}")
     
     async def save_loop(self):
-        """定期保存数据"""
+        """Periodically save data"""
         while True:
             await asyncio.sleep(self.save_interval)
             self.save_all_data()
             logger.info(f"Data saved - {len(self.market_data)} instruments")
     
     def save_all_data(self):
-        """保存所有数据到分文件"""
+        """Save all data to separate files"""
         current_time = datetime.now().isoformat()
         
-        # 保存概要文件
+        # Save summary file
         summary = {
             'update_time': current_time,
             'instrument_count': len(self.market_data),
             'instruments': list(self.market_data.keys())
         }
         
-        # 原子写入概要文件
+        # Atomic write summary file
         temp_summary = f"{self.summary_file}.tmp"
         with open(temp_summary, 'w') as f:
             json.dump(summary, f, separators=(',', ':'))
         os.replace(temp_summary, self.summary_file)
         
-        # 保存每个产品的数据文件
+        # Save data file for each product
         for inst_id, inst_data in self.market_data.items():
             self.save_instrument_data(inst_id, inst_data, current_time)
     
     def save_instrument_data(self, inst_id, inst_data, update_time):
-        """保存单个产品的数据"""
+        """Save data for a single product"""
         output = {
             'update_time': update_time,
             'instrument': inst_id,
             'data': inst_data
         }
         
-        # 原子写入产品数据文件
+        # Atomic write product data file
         data_file = f"{self.data_dir}/{inst_id}.json"
         temp_file = f"{data_file}.tmp"
         

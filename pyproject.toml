@@ -1,0 +1,17 @@
+[project]
+name = "openlucky"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.8.0",
+    "numpy>=1.21.0",
+    "pandas>=1.3.0",
+    "pydantic>=2.0.0",
+    "python-okx==0.2.8",
+    "requests>=2.25.0",
+    "scipy>=1.7.0",
+    "websockets>=10.0",
+    "xai-sdk>=0.0.1",
+]

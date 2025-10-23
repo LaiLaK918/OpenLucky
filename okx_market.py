@@ -663,7 +663,7 @@ class ProfessionalMarketAnalyzer:
         }
 
     def _calculate_volatility_enriched(self, highs: np.ndarray, lows: np.ndarray, closes: np.ndarray) -> Dict[str, float]:
-        """HV10/20/50、极值振幅、近24h最大回撤、偏度/峰度与波动滚动分位"""
+        """HV10/20/50, extreme amplitude, max drawdown in last 24h, skewness/kurtosis and volatility rolling quantiles"""
         indicators: Dict[str, float] = {}
         if len(closes) < 20:
             return indicators
@@ -677,13 +677,13 @@ class ProfessionalMarketAnalyzer:
         indicators['hv20'] = hv(returns, 20)
         indicators['hv50'] = hv(returns, 50) if len(returns) >= 50 else hv(returns, len(returns))
 
-        # 近24h（288根5m）极值振幅与最大回撤
+        # Extreme amplitude and max drawdown in last 24h (288 5m bars)
         window = min(288, len(closes))
         recent = closes[-window:]
         if len(recent) >= 2:
             rng = (np.max(recent) - np.min(recent)) / recent[0] * 100 if recent[0] > 0 else 0.0
             indicators['range_pct_24h'] = float(rng)
-            # 最大回撤（简单近似）
+            # Max drawdown (simple approximation)
             peak = recent[0]
             mdd = 0.0
             for p in recent:
@@ -697,13 +697,13 @@ class ProfessionalMarketAnalyzer:
             indicators['range_pct_24h'] = 0.0
             indicators['mdd_24h'] = 0.0
 
-        # 偏度/峰度与波动滚动分位
+        # Skewness/kurtosis and volatility rolling quantiles
         try:
             if len(returns) >= 20:
                 indicators['skew_20'] = float(stats.skew(returns[-20:]))
                 indicators['kurtosis_20'] = float(stats.kurtosis(returns[-20:]))
             vol = hv(returns, min(50, len(returns)))
-            # 简易滚动分位（近200根的分位）
+            # Simple rolling quantiles (last 200 bars quantiles)
             hist_win = min(200, len(returns))
             if hist_win >= 20:
                 vols = []
@@ -716,7 +716,7 @@ class ProfessionalMarketAnalyzer:
         return indicators
 
     def _calculate_trend_quality(self, highs: np.ndarray, lows: np.ndarray, closes: np.ndarray) -> Dict[str, float]:
-        """ADX14、Aroon(25)、CCI(20)、BB squeeze评分"""
+        """ADX14, Aroon(25), CCI(20), BB squeeze score"""
         out: Dict[str, float] = {}
         n = len(closes)
         if n < 26:
@@ -770,12 +770,12 @@ class ProfessionalMarketAnalyzer:
             md = np.mean(np.abs(tp[-cci_len:] - sma_tp))
             out['cci_20'] = float((tp[-1] - sma_tp) / (0.015 * md)) if md > 0 else 0.0
         
-        # BB squeeze score（带宽相对过去分位）
+        # BB squeeze score (bandwidth relative to past quantiles)
         if n >= 20:
             std = np.std(closes[-20:])
             ma = np.mean(closes[-20:])
             bbw = (2 * 2 * std) / ma * 100 if ma > 0 else 0.0
-            # 用近200根的bbw分位作为 squeeze 程度
+            # Use last 200 bars' bbw quantiles as squeeze level
             hist = []
             hist_win = min(200, n)
             for i in range(20, hist_win + 1):
@@ -784,11 +784,11 @@ class ProfessionalMarketAnalyzer:
                 hist.append((2 * 2 * s) / m * 100 if m > 0 else 0.0)
             if hist:
                 rank = sum(1 for v in hist if v >= bbw)
-                out['bb_squeeze_score'] = float(100 - rank / len(hist) * 100)  # 越高越挤压
+                out['bb_squeeze_score'] = float(100 - rank / len(hist) * 100)  # Higher means more squeezed
         return out
 
     def _calculate_volume_enriched(self, closes: np.ndarray, volumes: np.ndarray) -> Dict[str, float]:
-        """量能Z分数、OBV、CMF、VWAP偏离、买压均值与趋势（基于已有 buying_pressure）"""
+        """Volume Z-score, OBV, CMF, VWAP deviation, buying pressure mean and trend (based on existing buying_pressure)"""
         out: Dict[str, float] = {}
         n = len(closes)
         if n < 20:
@@ -799,7 +799,7 @@ class ProfessionalMarketAnalyzer:
         mu = float(np.mean(vol_win))
         sigma = float(np.std(vol_win))
         out['volume_z_20'] = float((volumes[-1] - mu) / sigma) if sigma > 0 else 0.0
-        # OBV（近20根归一化）
+        # OBV (last 20 bars normalized)
         obv = 0.0
         for i in range(1, n):
             if closes[i] > closes[i-1]:
@@ -810,19 +810,19 @@ class ProfessionalMarketAnalyzer:
         # CMF(20)
         mfv = []
         for i in range(n - win, n):
-            high = closes[i]  # 近似用收盘代替，避免额外参数
+            high = closes[i]  # Approximate using close price to avoid extra parameters
             low = closes[i]
             close = closes[i]
             vol = volumes[i]
             mfm = ((close - low) - (high - close)) / ((high - low) if (high != low) else 1)
             mfv.append(mfm * vol)
         out['cmf_20'] = float(sum(mfv) / sum(volumes[-win:])) if sum(volumes[-win:]) > 0 else 0.0
-        # VWAP 偏离（20）
+        # VWAP deviation (20)
         v = volumes[-win:]
         p = closes[-win:]
         vwap = float(np.sum(p * v) / np.sum(v)) if np.sum(v) > 0 else p[-1]
         out['vwap_dev_pct_20'] = float((closes[-1] - vwap) / vwap * 100) if vwap > 0 else 0.0
-        # 买压均值与趋势（需要上游 _calculate_order_flow 产出 buying_pressure_series 可用时再细化，此处退化为使用单点）
+        # Buying pressure mean and trend (needs upstream _calculate_order_flow to output buying_pressure_series when available for refinement, currently degraded to use single point)
         if 'buying_pressure' in out:
             pass
         return out
@@ -912,13 +912,13 @@ class ProfessionalMarketAnalyzer:
             return 0.0
 
         # Rate of Change (ROC) across multiple horizons (5m bars)
-        roc_1 = roc_bars(1)    # 5分钟
-        roc_3 = roc_bars(3)    # 15分钟
-        roc_5 = roc_bars(5)    # 25分钟
-        roc_10 = roc_bars(10)  # 50分钟
-        roc_12 = roc_bars(12)  # 60分钟
-        roc_20 = roc_bars(20)  # 100分钟
-        roc_60 = roc_bars(60)  # 5小时
+        roc_1 = roc_bars(1)    # 5 minutes
+        roc_3 = roc_bars(3)    # 15 minutes
+        roc_5 = roc_bars(5)    # 25 minutes
+        roc_10 = roc_bars(10)  # 50 minutes
+        roc_12 = roc_bars(12)  # 60 minutes
+        roc_20 = roc_bars(20)  # 100 minutes
+        roc_60 = roc_bars(60)  # 5 hours
         
         # Commodity Channel Index (CCI)
         typical_price = prices[-1]  # Simplified
@@ -1228,7 +1228,7 @@ class ProfessionalMarketAnalyzer:
             if analysis:
                 all_analyses.append(analysis)
         
-        # Sort by volume and volatility for better visibility (展示排序，不做筛选)
+        # Sort by volume and volatility for better visibility (display sorting, no filtering)
         all_analyses.sort(key=lambda x: x.volume_ratio * x.volatility_percentile, reverse=True)
         
         logger.info(f"Generated market analysis for {len(all_analyses)} instruments")
@@ -1247,11 +1247,11 @@ class ProfessionalMarketAnalyzer:
             if not candles:
                 return None
                 
-            current_price = float(candles[0][4])  # 最新一根5mK线的收盘价
+            current_price = float(candles[0][4])  # Close price of latest 5m candle
 
-            # 用时间戳“就近匹配”方式计算 1h 与 24h 的对比收盘价，避免断层导致的误判
+            # Use timestamp proximity matching to calculate 1h and 24h comparison close prices, avoiding misjudgment caused by gaps
             def price_at_offset(target_ms: int, tolerance_ms: int = 2 * 60 * 1000) -> float:
-                """在5m K线中寻找最接近 target_ms 的收盘价；若无容差内样本，则返回全体中时间最接近者的收盘价"""
+                """Find close price closest to target_ms in 5m candles; if no samples within tolerance, return close price of the temporally closest one in all samples"""
                 nearest_price = None
                 nearest_diff = None
                 for k in candles:
@@ -1342,9 +1342,9 @@ class ProfessionalMarketAnalyzer:
                 support_level=indicators.get('support', current_price * 0.95),  # Fixed: was 'support_level'
                 resistance_level=indicators.get('resistance', current_price * 1.05),  # Fixed: was 'resistance_level'
                 trend_strength=indicators.get('structure_trend', 0),  # Fixed: was 'trend_strength'
-                momentum_5min=indicators.get('momentum_1', 0),   # 1根5mK线 ≈ 5分钟
-                momentum_15min=indicators.get('momentum_3', 0),  # 3根5mK线 ≈ 15分钟
-                momentum_1h=indicators.get('momentum_12', 0),    # 12根5mK线 ≈ 60分钟
+                momentum_5min=indicators.get('momentum_1', 0),   # 1 5m candle ≈ 5 minutes
+                momentum_15min=indicators.get('momentum_3', 0),  # 3 5m candles ≈ 15 minutes
+                momentum_1h=indicators.get('momentum_12', 0),    # 12 5m candles ≈ 60 minutes
                 
                 # Market Structure
                 volatility_percentile=min(100, indicators.get('volatility', 0)),  # Already in percentage

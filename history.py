@@ -213,7 +213,7 @@ class OKXHistoryGenerator:
             Markdown formatted report string
         """
         if not positions:
-            return "# 历史仓位报告\n\n暂无历史仓位数据。\n"
+            return "# Historical Position Report\n\nNo historical position data available.\n"
         
         # Sort positions by close time (most recent first)
         sorted_positions = sorted(
@@ -224,25 +224,25 @@ class OKXHistoryGenerator:
         
         # Generate markdown content
         markdown_lines = [
-            "# 历史仓位报告",
+            "# Historical Position Report",
             "",
-            f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            f"**总计仓位数**: {len(positions)}",
+            f"**Generation Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"**Total Positions**: {len(positions)}",
             "",
-            "## 仓位明细",
+            "## Position Details",
             "",
-            "| 交易品种 | 仓位状态 | 开仓均价 | 平仓均价 | 已实现收益 | 已实现收益率 | 最大持仓量 | 已平仓量 | 开仓时间 | 平仓时间 |",
-            "|---------|----------|----------|----------|------------|-------------|-----------|----------|----------|----------|"
+            "| Trading Pair | Position Status | Open Avg Price | Close Avg Price | Realized PnL | Realized PnL Ratio | Max Position Size | Closed Size | Open Time | Close Time |",
+            "|-------------|-----------------|---------------|-----------------|-------------|-------------------|------------------|-------------|-----------|------------|"
         ]
         
         for position in sorted_positions:
             # Extract and format data
-            inst_id = position.get('instId', 'N/A').replace('-USDT-SWAP', 'USDT 永续')
+            inst_id = position.get('instId', 'N/A').replace('-USDT-SWAP', 'USDT Perpetual')
             lever = position.get('lever', 'N/A')
             if lever != 'N/A':
                 inst_id += f"\n{lever}x"
             
-            pos_status = "全部平仓"  # All historical positions are closed
+            pos_status = "Fully Closed"  # All historical positions are closed
             
             open_price = self.format_price(position.get('openAvgPx', ''))
             close_price = self.format_price(position.get('closeAvgPx', ''))
@@ -284,16 +284,16 @@ class OKXHistoryGenerator:
         
         markdown_lines.extend([
             "",
-            "## 统计摘要",
+            "## Statistical Summary",
             "",
-            f"- **总实现盈亏**: {'+' if total_pnl > 0 else ''}{total_pnl:.4f} USDT",
-            f"- **盈利仓位数**: {profitable_positions}",
-            f"- **亏损仓位数**: {len(positions) - profitable_positions}",
-            f"- **胜率**: {win_rate:.2f}%",
+            f"- **Total Realized PnL**: {'+' if total_pnl > 0 else ''}{total_pnl:.4f} USDT",
+            f"- **Profitable Positions**: {profitable_positions}",
+            f"- **Loss Positions**: {len(positions) - profitable_positions}",
+            f"- **Win Rate**: {win_rate:.2f}%",
             "",
             "---",
             "",
-            "*报告由 OKX API 自动生成*"
+            "*Report generated automatically by OKX API*"
         ])
         
         return "\n".join(markdown_lines)
