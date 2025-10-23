@@ -3,7 +3,7 @@
 AI Analysis Module for Cryptocurrency Trading Decisions
 
 This module integrates xAI SDK with OKX API data to generate structured trading decisions.
-Uses grok-4-0709 model with structured outputs for reliable JSON responses.
+Uses grok-4-fast-non-reasoning model with structured outputs for reliable JSON responses.
 """
 
 import os
@@ -95,6 +95,7 @@ class AIAnalyzer:
         
         # Initialize xAI client
         self.xai_api_key = self.config.get('XAI', 'api_key')
+        self.model = self.config.get('XAI', 'model', fallback='grok-4-fast-non-reasoning')
         self.client = Client(
             api_key=self.xai_api_key,
             timeout=3600  # Extended timeout for reasoning models
@@ -185,7 +186,7 @@ class AIAnalyzer:
             print(f"DEBUG: User prompt length: {len(user_prompt)} chars")
             
             # Create chat session
-            chat = self.client.chat.create(model="grok-4-0709")
+            chat = self.client.chat.create(model=self.model)
             chat.append(system(system_prompt))
             chat.append(user(user_prompt))
             
@@ -241,7 +242,7 @@ class AIAnalyzer:
             # Add metadata
             decision_dict['_metadata'] = {
                 'timestamp': datetime.now().isoformat(),
-                'model': 'grok-4-0709',
+                'model': self.model,
                 'analysis_type': 'ai_structured_output'
             }
             
@@ -259,7 +260,7 @@ class AIAnalyzer:
                 'reason': f"Analysis failed due to error: {str(e)}. No trading action recommended.",
                 '_metadata': {
                     'timestamp': datetime.now().isoformat(),
-                    'model': 'grok-4-0709',
+                    'model': self.model,
                     'analysis_type': 'error_fallback',
                     'error': str(e)
                 }
@@ -297,8 +298,8 @@ class AIAnalyzer:
             Trading decision dictionary
         """
         print("Starting AI trading analysis...")
-        print(f"Using model: grok-4-0709")
-        
+        print(f"Using model: {self.model}")
+
         # Perform analysis
         decision = self.analyze_and_decide()
         
