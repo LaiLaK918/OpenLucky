@@ -14,3 +14,14 @@ api_key = your_xai_api_key_here
 # Trading execution interval (minutes)
 # 交易执行间隔（分钟）
 interval_minutes = 30
+
+[ANALYSIS]
+# Use optimized report for AI analysis (reduces token usage by ~96%)
+# 使用优化报告进行AI分析（减少约96%的token使用）
+use_optimized_report = true
+# Maximum number of opportunities to show in optimized report
+# 优化报告中显示的最大机会数量
+max_opportunities = 25
+# Include detailed breakdown for top N opportunities
+# 包含前N个机会的详细分析
+detailed_breakdown_count = 5

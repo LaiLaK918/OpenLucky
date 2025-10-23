@@ -54,7 +54,7 @@ Please return your trading decision in JSON format as follows (you can use param
 
 reason - Summarize your analysis process and decision-making approach.
 
-⚠️ **CRITICAL WARNING: MULTIPLE ORDERS MARGIN CALCULATION**
+**CRITICAL WARNING: MULTIPLE ORDERS MARGIN CALCULATION**
 When creating multiple orders, you MUST calculate margin requirements cumulatively:
 1. If closures provided: Add released margin (imr) to availBal FIRST
 2. Order 1 uses: (sz1 × ctVal1 × price1) ÷ leverage1 margin
